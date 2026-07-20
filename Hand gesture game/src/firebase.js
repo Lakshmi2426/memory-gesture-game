@@ -2,13 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAmhiDTZoskOOLQrkpsGHO4SZs6G5rpYhk",
-  authDomain: "memory-game-4a39a.firebaseapp.com",
-  projectId: "memory-game-4a39a",
-  storageBucket: "memory-game-4a39a.firebasestorage.app",
-  messagingSenderId: "20740521980",
-  appId: "1:20740521980:web:a34e3eb973ae83ab307c79",
-  measurementId: "G-SDPV9DNW6M"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = initializeApp(firebaseConfig);
