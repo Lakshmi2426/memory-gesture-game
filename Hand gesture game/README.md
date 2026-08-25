@@ -1,85 +1,153 @@
-# Memory Moves
+# Memory Moves – Hand Gesture Memory Game
 
-Memory Moves is a webcam-based hand-gesture memory game built with React, TypeScript, Vite, and MediaPipe. Players watch a new gesture appear at each level, remember the full sequence, and repeat it with their hand in front of the camera.
+A webcam-based gesture memory game powered by **MediaPipe Hand Tracking**. Watch a new gesture each level, remember the growing sequence, and repeat it in order using your hand!
 
-## Features
+```
+Hand gesture game/
+├── frontend/      ← React + Vite + TypeScript + TailwindCSS v4
+└── backend/       ← Express + Firebase Admin (leaderboard API)
+```
 
-- Webcam-based hand detection and gesture recognition
-- Progressive memory gameplay with increasing sequence length
-- Tutorial flow for learning supported gestures
-- Score, lives, and high-score tracking
-- Responsive UI built with React and Tailwind-style components
-- Firebase integration scaffold for future persistence or leaderboard features
+---
 
-## Supported gestures
+## 🎮 Gameplay
 
-- Open palm: ✋
-- Fist: ✊
-- Peace: ✌️
-- Thumbs up: 👍
-- OK: 👌
+| Level | Game shows | Player performs |
+|---|---|---|
+| 1 | ✋ | ✋ |
+| 2 | 👍 | ✋ → 👍 |
+| 3 | ✌️ | ✋ → 👍 → ✌️ |
 
-## Tech stack
+- **3 lives** — lose a life on wrong gesture or timeout
+- **Scoring**: +10 per level, +5 for perfect run, +5 for fast completion
+- **5 gestures**: ✋ ☝️ 👍 ✌️ 👌
 
-- React 19
-- TypeScript
-- Vite
-- MediaPipe Tasks Vision
-- Firebase
-- Lucide React
+---
 
-## Getting started
+## 🚀 Quick Start
 
-1. Install dependencies:
+### Frontend (development)
 
-   ```bash
-   npm install
-   ```
+```bash
+cd frontend
+npm install
+cp .env.example .env          # fill in Firebase values
+npm run dev
+```
 
-2. Start the development server:
+Open http://localhost:5173
 
-   ```bash
-   npm run dev
-   ```
+### Backend (optional – leaderboard API)
 
-3. Open the local URL shown by Vite in your browser.
+```bash
+cd backend
+npm install
+cp .env.example .env          # fill in Firebase Admin credentials
+npm run dev
+```
 
-## Available scripts
+API runs at http://localhost:3001
 
-- `npm run dev` — start the development server
-- `npm run build` — build the app for production
-- `npm run preview` — preview the production build locally
-- `npm run lint` — run the linter
+---
 
-## Browser requirements
+## 📦 Scripts
 
-- A modern browser with webcam access
-- Camera permissions enabled for local development
-- A reliable local device camera for gesture recognition
+### Frontend
+| Command | Description |
+|---|---|
+| `npm run dev` | Start Vite dev server |
+| `npm run build` | TypeScript check + production bundle |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Lint with oxlint |
+| `npm run deploy` | Build + deploy to Firebase Hosting |
 
-## Environment variables
+### Backend
+| Command | Description |
+|---|---|
+| `npm run dev` | Start with ts-node-dev (hot reload) |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled production server |
 
-The app uses Firebase configuration values from environment variables such as:
+---
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
-- `VITE_FIREBASE_MEASUREMENT_ID`
+## 🌐 Deployment
 
-If these are not set, the app will fall back to placeholder values in the Firebase setup file.
+### Frontend → Vercel
 
-## Project structure
+1. Push `frontend/` to GitHub
+2. Import the repo in [Vercel](https://vercel.com)
+3. **Root Directory**: `frontend`
+4. **Build Command**: `npm run build`
+5. **Output Directory**: `dist`
+6. Add all `VITE_*` environment variables from `frontend/.env.example`
 
-- `src/screens/` — main app screens such as home, tutorial, gameplay, and results
-- `src/components/` — reusable UI components
-- `src/context/` — game state and navigation logic
-- `src/camera/` — webcam and hand tracking integration
-- `src/gestures/` — gesture recognition rules and classification logic
-- `src/game/` — gameplay managers for score, lives, sequences, and timers
+The included `frontend/vercel.json` handles:
+- SPA client-side routing rewrites
+- `Cross-Origin-Embedder-Policy` + `Cross-Origin-Opener-Policy` headers (required by MediaPipe WASM)
 
-## Notes
+### Backend → Render
 
-This project is currently in active development. The core gameplay loop and gesture recognition flow are implemented, and the app can be run locally to test the experience end to end.
+1. Push `backend/` to GitHub
+2. Connect repo in [Render](https://render.com) → New Web Service
+3. **Root Directory**: `backend`
+4. **Build Command**: `npm install && npm run build`
+5. **Start Command**: `npm start`
+6. Add environment variables from `backend/.env.example` in the Render dashboard
+
+> **Important**: Firebase private key must be pasted with literal `\n` newlines preserved. In Render's dashboard, paste the key exactly as it appears in the JSON file.
+
+---
+
+## 🔥 Firebase Setup
+
+1. Create a project at [Firebase Console](https://console.firebase.google.com)
+2. Enable **Firestore Database** (start in test mode, then lock down rules)
+3. Add a **Web App** → copy config into `frontend/.env`
+4. Generate a **Service Account** key → use values in `backend/.env`
+
+### Firestore Security Rules (recommended)
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /leaderboard/{entry} {
+      allow read: if true;
+      allow write: if false; // Only backend writes via Admin SDK
+    }
+  }
+}
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend framework | React 19 + TypeScript |
+| Build tool | Vite 8 |
+| Styling | TailwindCSS v4 + custom CSS |
+| Hand tracking | MediaPipe Tasks Vision (WASM) |
+| Icons | Lucide React |
+| Backend | Express 4 + TypeScript |
+| Database | Firebase Firestore |
+| Validation | Zod |
+| Frontend deploy | Vercel |
+| Backend deploy | Render |
+
+---
+
+## 🐛 Bugs Fixed in This Version
+
+| Bug | Fix |
+|---|---|
+| Lives started at 2 instead of PRD's 3 | Fixed: `MAX_LIVES = 3` constant |
+| Timer double-penalized lives | Fixed: timer uses `setLives` functional updater only |
+| `ScoreCard.tsx` broken Tailwind classes | Fixed: replaced with inline styles |
+| `animate-slide-in-up` CSS class missing | Fixed: added keyframe + class to `index.css` |
+| Unused OpenCV.js CDN script in HTML | Fixed: removed |
+| Poppins font loaded (app uses Outfit) | Fixed: removed, Outfit loaded correctly |
+| Duplicate `src/firebase.js` | Fixed: deleted |
+| No Accuracy % on Game Over screen | Fixed: tracked & displayed |
+| No Perfect/Fast scoring bonuses | Fixed: +5 perfect, +5 fast per PRD §12 |

@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { GESTURE_EMOJIS, GESTURE_NAMES, RECOGNITION_CONFIG } from '../gestures/gestureRules';
 
 export type GameScreen = 'WELCOME' | 'HAND_DETECTION' | 'TUTORIAL' | 'GAMEPLAY' | 'RESULT';
 export type GameStatus = 'IDLE' | 'WATCHING' | 'PLAYING' | 'SUCCESS' | 'GAMEOVER';
+
+export const MAX_LIVES = 3; // PRD §10 specifies 3 lives
+export const MAX_LEVEL = 5;
 
 interface GameContextType {
   // Navigation / Routing
@@ -15,22 +18,27 @@ interface GameContextType {
   lives: number;
   highestScore: number;
   gameStatus: GameStatus;
-  
+
   // Sequences
   sequence: string[];
   expectedGestureIndex: number;
-  
+
   // Hardware & Gesture States
   isCameraActive: boolean;
   isHandDetected: boolean;
   detectedGesture: string;
   feedbackState: 'idle' | 'correct' | 'wrong';
-  
+
+  // Accuracy tracking
+  totalAttempts: number;
+  correctAttempts: number;
+
   // Actions
   resetGame: () => void;
   startNewGame: () => void;
+  restartCurrentLevel: () => void;
   processGestureInput: (gesture: string) => void;
-  
+
   // State Setters
   setLevel: React.Dispatch<React.SetStateAction<number>>;
   setScore: React.Dispatch<React.SetStateAction<number>>;
@@ -48,20 +56,28 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [screen, setScreen] = useState<GameScreen>('WELCOME');
   const [level, setLevel] = useState<number>(1);
   const [score, setScore] = useState<number>(0);
-  const [lives, setLives] = useState<number>(2);
+  const [lives, setLives] = useState<number>(MAX_LIVES); // Fixed: PRD §10 = 3 lives
   const [highestScore, setHighestScore] = useState<number>(0);
   const [gameStatus, setGameStatus] = useState<GameStatus>('IDLE');
-  
+
   const [sequence, setSequence] = useState<string[]>([]);
   const [expectedGestureIndex, setExpectedGestureIndex] = useState<number>(0);
-  
+
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [isHandDetected, setIsHandDetected] = useState<boolean>(false);
   const [detectedGesture, setDetectedGesture] = useState<string>(GESTURE_NAMES.UNKNOWN);
   const [feedbackState, setFeedbackState] = useState<'idle' | 'correct' | 'wrong'>('idle');
 
+  // Accuracy tracking
+  const [totalAttempts, setTotalAttempts] = useState<number>(0);
+  const [correctAttempts, setCorrectAttempts] = useState<number>(0);
+
   // Cooldown & stabilization trackers
   const [lastInputTime, setLastInputTime] = useState<number>(0);
+
+  // Track level start time for "fast completion" bonus (PRD §12)
+  const levelStartTimeRef = useRef<number>(0);
+  const isHandlingFailureRef = useRef<boolean>(false);
 
   // Load highest score from localStorage on init
   useEffect(() => {
@@ -85,6 +101,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     setExpectedGestureIndex(0);
     setGameStatus('WATCHING');
+    levelStartTimeRef.current = Date.now() + 2200; // Will be set after WATCHING ends
   }, [level, screen]);
 
   // Effect 2: Automatically transition from WATCHING to PLAYING status
@@ -93,7 +110,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const timer = setTimeout(() => {
       setGameStatus('PLAYING');
-    }, 2200); // 2.2 seconds for player to read the new gesture card
+      levelStartTimeRef.current = Date.now(); // Start timing when player must perform
+    }, 2200); // 2.2 seconds for player to observe the new gesture card
 
     return () => clearTimeout(timer);
   }, [gameStatus]);
@@ -103,19 +121,46 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetGame = () => {
+    isHandlingFailureRef.current = false;
     setLevel(1);
     setScore(0);
-    setLives(2);
+    setLives(MAX_LIVES);
     setSequence([]);
     setExpectedGestureIndex(0);
     setGameStatus('IDLE');
     setFeedbackState('idle');
     setDetectedGesture(GESTURE_NAMES.UNKNOWN);
+    setTotalAttempts(0);
+    setCorrectAttempts(0);
   };
 
   const startNewGame = () => {
     resetGame();
     navigateTo('HAND_DETECTION');
+  };
+
+  const restartCurrentLevel = () => {
+    if (isHandlingFailureRef.current) return;
+    isHandlingFailureRef.current = true;
+
+    setExpectedGestureIndex(0);
+    setFeedbackState('idle');
+    setDetectedGesture(GESTURE_NAMES.UNKNOWN);
+    setLives((prev) => {
+      const nextLives = prev - 1;
+
+      setTimeout(() => {
+        if (nextLives <= 0) {
+          setGameStatus('GAMEOVER');
+          navigateTo('RESULT');
+        } else {
+          setGameStatus('WATCHING');
+        }
+        isHandlingFailureRef.current = false;
+      }, 0);
+
+      return nextLives;
+    });
   };
 
   // Main input processor that validates stabilized gesture inputs
@@ -131,46 +176,58 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (gesture === GESTURE_NAMES.UNKNOWN) return;
 
     setLastInputTime(now);
+    setTotalAttempts((prev) => prev + 1);
 
     const expectedEmoji = sequence[expectedGestureIndex];
     const detectedEmoji = GESTURE_EMOJIS[gesture];
 
     if (detectedEmoji === expectedEmoji) {
-      // 1. Correct gesture detected
+      // ── Correct gesture ──
+      setCorrectAttempts((prev) => prev + 1);
       setFeedbackState('correct');
-      
+
       setTimeout(() => {
         setFeedbackState('idle');
-        
+
         // Check if this was the last gesture of the sequence
         if (expectedGestureIndex === sequence.length - 1) {
-          // Level Completed!
-          setScore((prev) => prev + 10);
-          setLevel((prev) => prev + 1);
-          setGameStatus('WATCHING');
+          // Level completed!
+          const elapsedSec = (Date.now() - levelStartTimeRef.current) / 1000;
+          const isFast = elapsedSec < sequence.length * 3; // under 3s per gesture = fast
+          const isPerfect = lives === MAX_LIVES; // no lives lost so far = perfect
+
+          // PRD §12: +10 level complete, +5 perfect, +5 fast
+          let points = 10;
+          if (isPerfect) points += 5;
+          if (isFast) points += 5;
+
+          setScore((prev) => {
+            const newScore = prev + points;
+            // Update high score if exceeded
+            const savedHigh = parseInt(localStorage.getItem('memory_moves_high_score') || '0', 10);
+            if (newScore > savedHigh) {
+              localStorage.setItem('memory_moves_high_score', newScore.toString());
+              setHighestScore(newScore);
+            }
+            return newScore;
+          });
+
+          if (level >= MAX_LEVEL) {
+            setGameStatus('SUCCESS');
+          } else {
+            setLevel((prev) => prev + 1);
+            setGameStatus('WATCHING');
+          }
         } else {
           // Advance to the next gesture in the sequence
           setExpectedGestureIndex((prev) => prev + 1);
         }
       }, 900);
-      
-    } else {
-      // 2. Wrong gesture detected
-      setFeedbackState('wrong');
-      const nextLives = lives - 1;
-      setLives(nextLives);
 
-      setTimeout(() => {
-        setFeedbackState('idle');
-        if (nextLives <= 0) {
-          setGameStatus('GAMEOVER');
-          navigateTo('RESULT');
-        } else {
-          // Restart/Retry current sequence
-          setGameStatus('WATCHING');
-          setExpectedGestureIndex(0);
-        }
-      }, 1000);
+    } else {
+      // ── Wrong gesture ──
+      setFeedbackState('wrong');
+      restartCurrentLevel();
     }
   };
 
@@ -190,6 +247,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isHandDetected,
         detectedGesture,
         feedbackState,
+        totalAttempts,
+        correctAttempts,
         setLevel,
         setScore,
         setLives,
@@ -200,6 +259,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setDetectedGesture,
         resetGame,
         startNewGame,
+        restartCurrentLevel,
         processGestureInput,
       }}
     >

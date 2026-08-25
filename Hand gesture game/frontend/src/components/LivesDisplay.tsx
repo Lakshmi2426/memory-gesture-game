@@ -1,12 +1,13 @@
 import React from 'react';
 import { Heart } from 'lucide-react';
+import { MAX_LIVES } from '../context/GameContext';
 
 interface LivesDisplayProps {
   lives: number;
   maxLives?: number;
 }
 
-export const LivesDisplay: React.FC<LivesDisplayProps> = ({ lives, maxLives = 2 }) => {
+export const LivesDisplay: React.FC<LivesDisplayProps> = ({ lives, maxLives = MAX_LIVES }) => {
   return (
     <div className="flex items-center gap-1" aria-label={`${lives} of ${maxLives} lives`}>
       {Array.from({ length: maxLives }).map((_, i) => (

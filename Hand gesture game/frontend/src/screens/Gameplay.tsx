@@ -7,16 +7,16 @@ import { handTracker } from '../camera/HandTracker';
 import { GestureClassifier } from '../gestures/classifier';
 import { GESTURE_NAMES } from '../gestures/gestureRules';
 import { drawHandLandmarks } from '../utils/drawing';
-import { CheckCircle2, AlertTriangle, Timer, Eye } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Timer, Eye, Clock } from 'lucide-react';
 
 export const Gameplay: React.FC = () => {
   const {
-    lives, setLives,
-    gameStatus, setGameStatus,
+    lives,
+    gameStatus,
     sequence, expectedGestureIndex,
     isHandDetected, setIsHandDetected,
     detectedGesture, setDetectedGesture,
-    feedbackState, processGestureInput,
+    feedbackState, processGestureInput, restartCurrentLevel,
   } = useGame();
 
   const videoRef    = useRef<HTMLVideoElement | null>(null);
@@ -27,14 +27,25 @@ export const Gameplay: React.FC = () => {
   const cameraFeedRef  = useRef<CameraFeed | null>(null);
   const classifierRef  = useRef<GestureClassifier | null>(null);
   const activeLoopRef  = useRef<boolean>(true);
-  const timerRef       = useRef<any>(null);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastGestureRef = useRef<string>(GESTURE_NAMES.UNKNOWN);
   const consFramesRef  = useRef<number>(0);
   const statusRef      = useRef(gameStatus);
   const processRef     = useRef(processGestureInput);
+  const restartRef     = useRef(restartCurrentLevel);
+  const livesRef       = useRef(lives);
 
-  useEffect(() => { statusRef.current  = gameStatus;        }, [gameStatus]);
+  useEffect(() => { statusRef.current  = gameStatus;         }, [gameStatus]);
   useEffect(() => { processRef.current = processGestureInput; }, [processGestureInput]);
+  useEffect(() => { restartRef.current = restartCurrentLevel; }, [restartCurrentLevel]);
+  useEffect(() => { livesRef.current   = lives;               }, [lives]);
+
+  useEffect(() => {
+    if (gameStatus === 'WATCHING') {
+      lastGestureRef.current = GESTURE_NAMES.UNKNOWN;
+      consFramesRef.current = 0;
+    }
+  }, [gameStatus]);
 
   const [timeLeft, setTimeLeft] = useState<number>(10);
 
@@ -53,9 +64,9 @@ export const Gameplay: React.FC = () => {
           setCameraError(null);
           loop();
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setIsCameraActive(false);
-        setCameraError(e.message ?? 'Could not access webcam.');
+        setCameraError(e instanceof Error ? e.message : 'Could not access webcam.');
       }
     })();
 
@@ -66,6 +77,7 @@ export const Gameplay: React.FC = () => {
       setIsHandDetected(false);
       setDetectedGesture(GESTURE_NAMES.UNKNOWN);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setIsHandDetected, setDetectedGesture]);
 
   /* ── 10-second countdown ── */
@@ -76,11 +88,10 @@ export const Gameplay: React.FC = () => {
         setTimeLeft(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current!);
-            // Time expired = lost life, restart WATCHING
-            const next = lives - 1;
-            setLives(next);
-            setGameStatus('WATCHING');
-            processGestureInput('TIME_EXPIRED_MOCK_WRONG');
+            timerRef.current = null;
+
+            restartRef.current();
+
             return 0;
           }
           return prev - 1;
@@ -90,7 +101,7 @@ export const Gameplay: React.FC = () => {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [gameStatus]);
+  }, [gameStatus, expectedGestureIndex]);
 
   /* ── rAF frame loop ── */
   const loop = () => {
@@ -127,7 +138,7 @@ export const Gameplay: React.FC = () => {
               consFramesRef.current = 0;
               ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-          } catch {}
+          } catch { /* silently ignore frame errors */ }
         }
       }
       requestAnimationFrame(frame);
@@ -142,9 +153,9 @@ export const Gameplay: React.FC = () => {
       await cameraFeedRef.current.start(videoRef.current);
       setIsCameraActive(true);
       loop();
-    } catch (e: any) {
+    } catch (e: unknown) {
       setIsCameraActive(false);
-      setCameraError(e.message ?? 'Could not reconnect.');
+      setCameraError(e instanceof Error ? e.message : 'Could not reconnect.');
     }
   };
 
@@ -178,11 +189,11 @@ export const Gameplay: React.FC = () => {
               background: timerDanger ? 'rgba(254,226,226,0.88)' : 'rgba(220,252,231,0.88)',
               border: `1.5px solid ${timerDanger ? 'rgba(254,202,202,0.95)' : 'rgba(187,247,208,0.95)'}`,
             }}>
-            <Timer
-              className={`w-5 h-5 ${timerDanger ? 'animate-timer-pulse' : ''}`}
-              style={{ color: timerDanger ? '#DC2626' : '#16A34A' }}
-            />
-            <div className={`text-2xl font-black tabular-nums leading-none`}
+            {timerDanger
+              ? <Timer className="w-5 h-5 animate-timer-pulse" style={{ color: '#DC2626' }} />
+              : <Clock className="w-5 h-5" style={{ color: '#16A34A' }} />
+            }
+            <div className="text-2xl font-black tabular-nums leading-none"
               style={{ color: timerDanger ? '#DC2626' : '#16A34A' }}>
               {timeLeft}s
             </div>
