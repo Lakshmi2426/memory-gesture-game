@@ -6,9 +6,10 @@ import { HandDetection } from './screens/HandDetection';
 import { Tutorial } from './screens/Tutorial';
 import { Gameplay } from './screens/Gameplay';
 import { Result } from './screens/Result';
+import { VictoryCelebration } from './components/VictoryCelebration';
 
 const GameContainer: React.FC = () => {
-  const { screen } = useGame();
+  const { screen, gameStatus } = useGame();
 
   const renderScreen = () => {
     switch (screen) {
@@ -30,6 +31,7 @@ const GameContainer: React.FC = () => {
       <main className="flex-1 flex flex-col relative z-10">
         {renderScreen()}
       </main>
+      {gameStatus === 'SUCCESS' && <VictoryCelebration />}
       <footer className="py-3 text-center text-[11px] font-semibold"
         style={{ color: '#64748B', borderTop: '1px solid rgba(226,232,240,0.88)', background: 'rgba(255,255,255,0.42)', backdropFilter: 'blur(10px)' }}>
         © 2026 Memory Moves · Powered by MediaPipe Hand Tracking
